@@ -28,13 +28,13 @@ func CreateBook(c *fiber.Ctx) error {
 
 	if err := c.BodyParser(&book); err != nil {
 		return c.Status(400).JSON(fiber.Map{
-			"message": "Invalid request",
+			"data": "Invalid request",
 		})
 	}
 
 	if len(book.Title) < 3 && len(book.Title) > 100 {
 		return c.Status(400).JSON(fiber.Map{
-			"message": "Title must be between 3 and 100 characters",
+			"data": "Title must be between 3 and 100 characters",
 		})
 	}
 
@@ -44,14 +44,14 @@ func CreateBook(c *fiber.Ctx) error {
 
 	if existingBook.ID > 0 {
 		return c.Status(400).JSON(fiber.Map{
-			"message": "Book already exists",
+			"data": "Book already exists",
 		})
 	}
 
 	db.GetDB().Create(&book)
 
 	return c.JSON(fiber.Map{
-		"message": "Book created successfully",
+		"data": "Book created successfully",
 	})
 }
 
@@ -74,7 +74,7 @@ func getInfiniteScrollBooks(c *fiber.Ctx) error {
 
 	if err != nil {
 		return c.Status(400).JSON(fiber.Map{
-			"message": "Invalid ID",
+			"data": "Invalid ID",
 		})
 	}
 
@@ -122,7 +122,7 @@ func GetUserBooks(c *fiber.Ctx) error {
 
 	if id == "" || id == "0" {
 		return c.Status(400).JSON(fiber.Map{
-			"message": "Invalid request",
+			"data": "Invalid request",
 		})
 	}
 
@@ -150,7 +150,7 @@ func CreateUserBook(c *fiber.Ctx) error {
 
 	if err := c.BodyParser(&request); err != nil {
 		return c.Status(400).JSON(fiber.Map{
-			"message": "Invalid request",
+			"data": "Invalid request",
 		})
 	}
 
@@ -166,12 +166,120 @@ func CreateUserBook(c *fiber.Ctx) error {
 	userBook.ISBN = userBookMap["isbn"].(string)
 	userBook.Pages = uint(userBookMap["pages"].(float64))
 	userBook.PagesRead = uint(userBookMap["pages_read"].(float64))
+	userBook.Genre = userBookMap["genre"].(string)
+
+	var existingUserBook models.UserBooks
+
+	var existingBook models.Book
+
+	db.GetDB().Where("id = ?", userBook.BookID).First(&existingBook)
+
+	if existingBook.ID == 0 {
+		return c.Status(400).JSON(fiber.Map{
+			"data": "Book doesn't exist",
+		})
+	}
+
+	db.GetDB().Where("user_id = ? AND book_id = ?", userBook.UserID, userBook.BookID).First(&existingUserBook)
+
+	if existingUserBook.UserBooksID > 0 {
+		return c.Status(400).JSON(fiber.Map{
+			"data": "You already have this book",
+		})
+	}
 
 	db.GetDB().Create(&userBook)
 
 	return c.JSON(fiber.Map{
 		"message": "User book created successfully",
 		"data":    userBook,
+	})
+
+}
+
+func UpdateReadingBook(c *fiber.Ctx) error {
+
+	request := make(map[string]interface{})
+
+	if err := c.BodyParser(&request); err != nil {
+		return c.Status(400).JSON(fiber.Map{
+			"data": "Invalid request",
+		})
+	}
+
+	var userBook models.UserBooks
+
+	userBookMap := request
+
+	db.GetDB().Where("user_books_id = ?", userBookMap["user_books_id"]).First(&userBook)
+
+	userBook.PagesRead = uint(userBookMap["pages_read"].(float64))
+
+	db.GetDB().Save(&userBook)
+
+	return c.JSON(fiber.Map{
+		"message":    "User book updated successfully",
+		"pages_read": userBook.PagesRead,
+	})
+
+}
+
+func UpdateGenre(c *fiber.Ctx) error {
+
+	request := make(map[string]interface{})
+
+	if err := c.BodyParser(&request); err != nil {
+		return c.Status(400).JSON(fiber.Map{
+			"data": "Invalid request",
+		})
+	}
+
+	var book models.UserBooks
+
+	bookMap := request
+
+	db.GetDB().Where("user_books_id = ?", bookMap["user_books_id"]).First(&book)
+
+	if book.UserBooksID == 0 {
+		return c.Status(400).JSON(fiber.Map{
+			"data": "Book doesn't exist",
+		})
+	}
+
+	book.Genre = bookMap["genre"].(string)
+
+	db.GetDB().Save(&book)
+
+	return c.JSON(fiber.Map{
+		"message": "Book genre updated successfully",
+		"data":    book.Genre,
+	})
+}
+
+func DeleteUserBook(c *fiber.Ctx) error {
+
+	id := c.Params("bookId")
+
+	if id == "" || id == "0" {
+		return c.Status(400).JSON(fiber.Map{
+			"data": "Invalid request",
+		})
+	}
+
+	var userBook models.UserBooks
+
+	db.GetDB().Where("user_books_id = ?", id).First(&userBook)
+
+	if userBook.UserBooksID == 0 {
+		return c.Status(404).JSON(fiber.Map{
+			"data": "User book not found",
+		})
+	}
+
+	db.GetDB().Delete(&userBook)
+
+	return c.JSON(fiber.Map{
+		"message": "User book deleted successfully",
 	})
 
 }

@@ -23,8 +23,6 @@ func Connect() {
 		panic(err)
 	}
 
-	db.Exec("UPDATE user_books SET year = 2024 WHERE year = ''")
-
 	models.MigrateBooks(db)
 
 	database = db

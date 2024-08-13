@@ -14,6 +14,7 @@ type Book struct {
 	ISBN        string `gorm:"size:100" json:"isbn"`
 	Language    string `gorm:"size:100" json:"language"`
 	Pages       uint   `json:"pages"`
+	Genre       string `gorm:"size:100" json:"genre"`
 	Publisher   string `gorm:"size:100" json:"publisher"`
 	Description string `gorm:"size:1000" json:"description"`
 	Users       []User `gorm:"many2many:user_books"`
@@ -38,6 +39,7 @@ type UserBooks struct {
 	ISBN        string `json:"isbn" db:"book.isbn"`
 	Pages       uint   `json:"pages" db:"book.pages"`
 	PagesRead   uint   `json:"pages_read" db:"pages_read"`
+	Genre       string `json:"genre" db:"book.genre"`
 }
 
 func MigrateBooks(db *gorm.DB) {
