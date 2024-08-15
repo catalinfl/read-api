@@ -10,6 +10,7 @@ func booksRoute(api fiber.Router) {
 
 	bookRoute.Get("/", controllers.GetAllBooks)
 	bookRoute.Get("/verify", controllers.VerifyLogin)
+	bookRoute.Delete("/:id", controllers.DeleteBook)
 	bookRoute.Post("/", controllers.CreateBook)
 
 	bookRoute.Get("/user-books", controllers.GetAllUserBooks)

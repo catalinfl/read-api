@@ -197,6 +197,33 @@ func CreateUserBook(c *fiber.Ctx) error {
 
 }
 
+func DeleteBook(c *fiber.Ctx) error {
+
+	id := c.Params("id")
+
+	if id == "" || id == "0" {
+		return c.Status(400).JSON(fiber.Map{
+			"data": "Invalid request",
+		})
+	}
+
+	var book models.Book
+
+	db.GetDB().Where("id = ?", id).First(&book)
+
+	if book.ID == 0 {
+		return c.Status(404).JSON(fiber.Map{
+			"data": "Book not found",
+		})
+	}
+
+	db.GetDB().Delete(&book)
+
+	return c.JSON(fiber.Map{
+		"message": "Book deleted successfully",
+	})
+}
+
 func UpdateReadingBook(c *fiber.Ctx) error {
 
 	request := make(map[string]interface{})
@@ -215,7 +242,7 @@ func UpdateReadingBook(c *fiber.Ctx) error {
 
 	userBook.PagesRead = uint(userBookMap["pages_read"].(float64))
 
-	db.GetDB().Save(&userBook)
+	db.GetDB().Model(&userBook).Updates(userBook)
 
 	return c.JSON(fiber.Map{
 		"message":    "User book updated successfully",
@@ -234,13 +261,13 @@ func UpdateGenre(c *fiber.Ctx) error {
 		})
 	}
 
-	var book models.UserBooks
+	var book models.Book
 
 	bookMap := request
 
-	db.GetDB().Where("user_books_id = ?", bookMap["user_books_id"]).First(&book)
+	db.GetDB().Where("id = ?", bookMap["id"]).First(&book)
 
-	if book.UserBooksID == 0 {
+	if book.ID == 0 {
 		return c.Status(400).JSON(fiber.Map{
 			"data": "Book doesn't exist",
 		})

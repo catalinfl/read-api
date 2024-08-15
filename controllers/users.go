@@ -68,7 +68,7 @@ func CreateUser(c *fiber.Ctx) error {
 	db.GetDB().Create(&user)
 
 	return c.JSON(fiber.Map{
-		"message": user,
+		"message": "User created successfully",
 	})
 }
 
@@ -95,6 +95,8 @@ func Login(c *fiber.Ctx) error {
 	}
 
 	var user models.User
+
+	fmt.Println(request["name"])
 
 	db.GetDB().Where("name = ?", request["name"]).First(&user)
 

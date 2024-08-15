@@ -21,12 +21,14 @@ type Book struct {
 }
 
 type User struct {
-	ID       int    `gorm:"primaryKey" json:"id"`
-	Name     string `gorm:"size:40" json:"name"`
-	Email    string `gorm:"size:40" json:"email"`
-	Password string `gorm:"size:100" json:"password"`
-	Rank     string `gorm:"size:20" json:"rank"`
-	Books    []Book `gorm:"many2many:user_books"`
+	ID        int    `gorm:"primaryKey" json:"id"`
+	Name      string `gorm:"size:40" json:"name"`
+	RealName  string `gorm:"size:60" json:"real_name"`
+	Email     string `gorm:"size:40" json:"email"`
+	Password  string `gorm:"size:100" json:"password"`
+	Rank      string `gorm:"size:20" json:"rank"`
+	Books     []Book `gorm:"many2many:user_books"`
+	Librarian bool   `json:"librarian"`
 }
 
 type UserBooks struct {
