@@ -165,61 +165,6 @@ func GetUsers(c *fiber.Ctx) error {
 
 }
 
-func VerifyLogin(c *fiber.Ctx) error {
-
-	token := c.Cookies("jwt_token")
-
-	fmt.Println(token)
-
-	if token == "" {
-		return c.Status(401).JSON(fiber.Map{
-			"message": "Unauthorized",
-		})
-	}
-
-	str := verifyToken(token)
-
-	if str == "" {
-		return c.Status(401).JSON(fiber.Map{
-			"message": "Unauthorized, please log in",
-		})
-	}
-
-	c.Next()
-
-	return nil
-}
-
-func verifyToken(token string) string {
-
-	godotenv.Load()
-
-	secret_jwt := os.Getenv("JWT_TOKEN_SECRET")
-
-	if secret_jwt == "" {
-		fmt.Println("Error loading JWT Key")
-	}
-
-	tok, err := jwt.Parse(token, func(jwt *jwt.Token) (interface{}, error) {
-		return []byte(secret_jwt), nil
-	})
-
-	if err != nil {
-		fmt.Println(err)
-	}
-
-	if !tok.Valid {
-		fmt.Println("Token is not valid")
-	}
-
-	if claims, ok := tok.Claims.(jwt.MapClaims); ok && tok.Valid {
-		return claims["name"].(string)
-	}
-
-	return ""
-
-}
-
 func GetUser(c *fiber.Ctx) error {
 
 	var user models.User
@@ -242,6 +187,117 @@ func GetUser(c *fiber.Ctx) error {
 
 	return c.JSON(fiber.Map{
 		"message": user,
+	})
+
+}
+
+func DeleteUser(c *fiber.Ctx) error {
+
+	id := c.Params("id")
+
+	if id == "" || id == "0" {
+		return c.Status(400).JSON(fiber.Map{
+			"message": "Invalid request",
+		})
+	}
+
+	var user models.User
+
+	db.GetDB().Where("id = ?", id).First(&user)
+
+	if user.ID == 0 {
+		return c.Status(404).JSON(fiber.Map{
+			"message": "User not found",
+		})
+	}
+
+	db.GetDB().Delete(&user)
+
+	return c.JSON(fiber.Map{
+		"message": "User deleted successfully",
+	})
+
+}
+
+func PromoteToLibrarian(c *fiber.Ctx) error {
+	id := c.Params("id")
+
+	if id == "" || id == "0" {
+		return c.Status(400).JSON(fiber.Map{
+			"message": "Invalid request",
+		})
+	}
+
+	var user models.User
+
+	db.GetDB().Where("id = ?", id).First(&user)
+
+	if user.ID == 0 {
+		return c.Status(404).JSON(fiber.Map{
+			"message": "User not found",
+		})
+	}
+
+	user.Librarian = true
+
+	db.GetDB().Save(&user)
+
+	return c.JSON(fiber.Map{
+		"message": fmt.Sprintf("User %s has been promoted to librarian", user.Name),
+	})
+
+}
+
+func ModifyUser(c *fiber.Ctx) error {
+
+	id := c.Params("id")
+
+	if id == "" {
+		return c.Status(401).JSON(fiber.Map{
+			"message": "User not found",
+		})
+	}
+
+	request := make(map[string]interface{})
+
+	if err := c.BodyParser(&request); err != nil {
+		return c.Status(404).JSON(fiber.Map{
+			"message": "Error at parsing json",
+		})
+	}
+
+	var user models.User
+
+	fmt.Println(id)
+
+	db.GetDB().Where("id = ?", id).First(&user)
+
+	fmt.Println(user.ID)
+
+	if user.ID == 0 {
+		return c.Status(404).JSON(fiber.Map{
+			"message": "User not found",
+		})
+	}
+
+	for key, val := range request {
+		switch key {
+		case "name":
+			user.Name = val.(string)
+		case "email":
+			user.Email = val.(string)
+		case "password":
+			password := hashPassword(val.(string))
+			user.Password = password
+		case "rank":
+			user.Rank = val.(string)
+		}
+	}
+
+	db.GetDB().Save(&user)
+
+	return c.Status(200).JSON(fiber.Map{
+		"message": "User has been modified",
 	})
 
 }

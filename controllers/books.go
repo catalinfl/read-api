@@ -1,11 +1,14 @@
 package controllers
 
 import (
+	"fmt"
 	"strconv"
 
 	"github.com/catalinfl/readit-api/db"
+	"github.com/catalinfl/readit-api/middlewares"
 	"github.com/catalinfl/readit-api/models"
 	"github.com/gofiber/fiber/v2"
+	"gorm.io/gorm"
 )
 
 func GetBooks(c *fiber.Ctx) error {
@@ -156,9 +159,25 @@ func CreateUserBook(c *fiber.Ctx) error {
 
 	var userBook models.UserBooks
 
+	token := c.Cookies("jwt_token")
+
+	t := middlewares.VerifyTokenAndParse(token)
+
+	if t == "" {
+		return c.Status(401).JSON(fiber.Map{
+			"data": "Unauthorized, please log in",
+		})
+	}
+
+	fmt.Println(t)
+
 	userBookMap := request.(map[string]interface{})
 
-	userBook.UserID = uint(userBookMap["user_id"].(float64))
+	var user models.User
+
+	db.GetDB().Where("name = ?", t).First(&user)
+
+	userBook.UserID = uint(user.ID)
 	userBook.BookID = uint(userBookMap["book_id"].(float64))
 	userBook.Title = userBookMap["title"].(string)
 	userBook.Author = userBookMap["author"].(string)
@@ -307,6 +326,84 @@ func DeleteUserBook(c *fiber.Ctx) error {
 
 	return c.JSON(fiber.Map{
 		"message": "User book deleted successfully",
+	})
+
+}
+
+func ModifyBook(c *fiber.Ctx) error {
+
+	id := c.Params("id")
+
+	if id == "" || id == "0" {
+		return c.Status(400).JSON(fiber.Map{
+			"data": "Invalid request",
+		})
+	}
+
+	var book models.Book
+
+	db.GetDB().Where("id = ?", id).First(&book)
+
+	if book.ID == 0 {
+		return c.Status(404).JSON(fiber.Map{
+			"data": "Book not found",
+		})
+	}
+
+	var request map[string]interface{}
+
+	if err := c.BodyParser(&request); err != nil {
+		return c.Status(400).JSON(fiber.Map{
+			"data": "Invalid request",
+		})
+	}
+
+	if err := db.GetDB().First(&book, id).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "Book not found",
+			})
+		}
+
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to fetch book",
+		})
+	}
+
+	for key, value := range request {
+		switch key {
+		case "title":
+			book.Title = value.(string)
+		case "author":
+			book.Author = value.(string)
+		case "year":
+			book.Year = value.(string)
+		case "isbn":
+			book.ISBN = value.(string)
+		case "language":
+			book.Language = value.(string)
+		case "pages":
+			book.Pages = uint(value.(float64)) // JSON numbers are float64
+		case "genre":
+			book.Genre = value.(string)
+		case "publisher":
+			book.Publisher = value.(string)
+		case "description":
+			book.Description = value.(string)
+		case "photos":
+			book.Photos = value.([]string)
+		}
+	}
+
+	if err := db.GetDB().Save(&book).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to update book",
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"message": "Book updated successfully",
+		"book":    book,
 	})
 
 }

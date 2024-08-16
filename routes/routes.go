@@ -9,5 +9,7 @@ func Setup(app *fiber.App) {
 
 	booksRoute(api)
 	usersRoute(api)
+	adminRoute(api)
+	librarianRoute(api)
 
 }
