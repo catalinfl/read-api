@@ -29,8 +29,6 @@ func VerifyLogin(c *fiber.Ctx) error {
 
 	token := c.Cookies("jwt_token")
 
-	fmt.Println(token)
-
 	if token == "" {
 		return c.Status(401).JSON(fiber.Map{
 			"message": "Unauthorized, please log in",
@@ -39,7 +37,7 @@ func VerifyLogin(c *fiber.Ctx) error {
 
 	str := VerifyTokenAndParse(token)
 
-	if str == "" {
+	if str == nil {
 		return c.Status(401).JSON(fiber.Map{
 			"message": "Unauthorized, something happened with jwt token",
 		})
@@ -60,7 +58,7 @@ func VerifyIfLibrarian(c *fiber.Ctx) error {
 
 	str := VerifyTokenAndParse(token)
 
-	if str == "" {
+	if str == nil {
 		return c.Status(401).JSON(fiber.Map{
 			"message": "Unauthorized, you are not a librarian",
 		})
@@ -97,7 +95,7 @@ func VerifyIfAdmin(c *fiber.Ctx) error {
 
 	str := VerifyTokenAndParse(token)
 
-	if str == "" {
+	if str == nil {
 		return c.Status(401).JSON(fiber.Map{
 			"message": "Unauthorized",
 		})
@@ -133,7 +131,7 @@ func CountUserBooks(c *fiber.Ctx) error {
 
 	str := VerifyTokenAndParse(token)
 
-	if str == "" {
+	if str == nil {
 		return c.Status(401).JSON(fiber.Map{
 			"message": "Unauthorized, please log in",
 		})
@@ -181,7 +179,7 @@ func CountUserBooks(c *fiber.Ctx) error {
 
 }
 
-func VerifyTokenAndParse(token string) string {
+func VerifyTokenAndParse(token string) map[string]interface{} {
 
 	godotenv.Load()
 
@@ -204,9 +202,9 @@ func VerifyTokenAndParse(token string) string {
 	}
 
 	if claims, ok := tok.Claims.(jwt.MapClaims); ok && tok.Valid {
-		return claims["name"].(string)
+		return claims
 	}
 
-	return ""
+	return nil
 
 }

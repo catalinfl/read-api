@@ -10,7 +10,7 @@ func adminRoute(api fiber.Router) {
 	adminRoute := api.Group("/admin")
 
 	// adminRoute.Use(middlewares.VerifyIfAdmin)
-
+	adminRoute.Get("/friends-requests", controllers.GetAllFriendsRequests)
 	adminRoute.Get("/users", controllers.GetUsers)
 	adminRoute.Put("/promote/:id", controllers.PromoteToLibrarian)
 	adminRoute.Put("/users/:id", controllers.ModifyUser)

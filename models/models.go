@@ -27,6 +27,14 @@ type Book struct {
 	Users       []User      `gorm:"many2many:user_books"`
 }
 
+type Friends struct {
+	SenderID     int    `json:"sender_id"`
+	ReceiverName string `json:"receiver_name"`
+	SenderName   string `json:"sender_name"`
+	ReceiverID   int    `json:"receiver_id"`
+	Status       string `json:"status"`
+}
+
 func (ms MultiString) Value() (driver.Value, error) {
 	return json.Marshal(ms)
 }
@@ -72,17 +80,12 @@ type UserBooks struct {
 	UserBooksID int    `gorm:"primaryKey" json:"user_books_id" db:"user_books.id"`
 	UserID      uint   `json:"user_id" db:"user.id"`
 	BookID      uint   `json:"book_id" db:"book.id"`
-	Title       string `json:"title" db:"book.title"`
-	Author      string `json:"author" db:"book.author"`
-	Year        uint   `json:"year" db:"book.year"`
-	ISBN        string `json:"isbn" db:"book.isbn"`
-	Pages       uint   `json:"pages" db:"book.pages"`
 	PagesRead   uint   `json:"pages_read" db:"pages_read"`
-	Genre       string `json:"genre" db:"book.genre"`
+	BookState   string `json:"book_state" db:"book_state"`
 }
 
 func MigrateBooks(db *gorm.DB) {
-	err := db.AutoMigrate(&Book{}, &User{}, &UserBooks{})
+	err := db.AutoMigrate(&Book{}, &User{}, &UserBooks{}, &Friends{})
 
 	if err != nil {
 		panic(err)

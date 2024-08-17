@@ -163,7 +163,7 @@ func CreateUserBook(c *fiber.Ctx) error {
 
 	t := middlewares.VerifyTokenAndParse(token)
 
-	if t == "" {
+	if t == nil {
 		return c.Status(401).JSON(fiber.Map{
 			"data": "Unauthorized, please log in",
 		})
@@ -179,13 +179,7 @@ func CreateUserBook(c *fiber.Ctx) error {
 
 	userBook.UserID = uint(user.ID)
 	userBook.BookID = uint(userBookMap["book_id"].(float64))
-	userBook.Title = userBookMap["title"].(string)
-	userBook.Author = userBookMap["author"].(string)
-	userBook.Year = uint(userBookMap["year"].(float64))
-	userBook.ISBN = userBookMap["isbn"].(string)
-	userBook.Pages = uint(userBookMap["pages"].(float64))
 	userBook.PagesRead = uint(userBookMap["pages_read"].(float64))
-	userBook.Genre = userBookMap["genre"].(string)
 
 	var existingUserBook models.UserBooks
 

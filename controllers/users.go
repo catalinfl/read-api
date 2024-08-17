@@ -3,10 +3,14 @@ package controllers
 import (
 	"fmt"
 	"os"
+	"reflect"
 	"regexp"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/catalinfl/readit-api/db"
+	"github.com/catalinfl/readit-api/middlewares"
 	"github.com/catalinfl/readit-api/models"
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v5"
@@ -96,8 +100,6 @@ func Login(c *fiber.Ctx) error {
 
 	var user models.User
 
-	fmt.Println(request["name"])
-
 	db.GetDB().Where("name = ?", request["name"]).First(&user)
 
 	if user.ID == 0 {
@@ -117,6 +119,7 @@ func Login(c *fiber.Ctx) error {
 	claims := token.Claims.(jwt.MapClaims)
 
 	claims["name"] = user.Name
+	claims["id"] = user.ID
 
 	secret_jwt := os.Getenv("JWT_TOKEN_SECRET")
 
@@ -165,6 +168,255 @@ func GetUsers(c *fiber.Ctx) error {
 
 }
 
+func BookStructToMap(obj interface{}) map[string]interface{} {
+	val := reflect.ValueOf(obj)
+
+	typ := reflect.TypeOf(obj)
+
+	data := make(map[string]interface{})
+
+	for i := 0; i < val.NumField(); i++ {
+		field := val.Field(i)
+
+		if field.Kind() == reflect.Struct {
+			continue
+		}
+
+		fieldName := strings.ToLower(typ.Field(i).Name)
+
+		if fieldName == "bookid" || fieldName == "userid" || fieldName == "userbooksid" || fieldName == "users" {
+			continue
+		}
+
+		data[fieldName] = field.Interface()
+
+	}
+
+	return data
+}
+
+func SendFriendRequest(c *fiber.Ctx) error {
+
+	id := c.Params("id")
+
+	if id == "" || id == "0" {
+		return c.Status(400).JSON(fiber.Map{
+			"message": "Invalid request",
+		})
+	}
+
+	token := c.Cookies("jwt_token")
+
+	if token == "" {
+		return c.Status(401).JSON(fiber.Map{
+			"message": "Unauthorized",
+		})
+	}
+
+	usr := middlewares.VerifyTokenAndParse(token)
+
+	if token == "" {
+		return c.Status(401).JSON(fiber.Map{
+			"message": "Unauthorized",
+		})
+	}
+
+	num, err := strconv.Atoi(id)
+
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{
+			"message": "Invalid request",
+		})
+	}
+
+	if int(usr["id"].(float64)) == num {
+		return c.Status(400).JSON(fiber.Map{
+			"message": "Invalid request",
+		})
+	}
+
+	var friendRequestReceived models.Friends
+
+	rows := db.GetDB().Where("receiver_id = ? AND sender_id = ?", num, int(usr["id"].(float64))).First(&friendRequestReceived)
+
+	if rows.RowsAffected > 0 {
+		return c.Status(400).JSON(fiber.Map{
+			"message": "Friend request already sent",
+		})
+	}
+
+	var user models.User
+
+	db.GetDB().Where("id = ?", id).First(&user)
+
+	if user.ID == 0 {
+		return c.Status(404).JSON(fiber.Map{
+			"message": "User not found",
+		})
+	}
+
+	var friendRequest models.Friends
+
+	friendRequest.SenderID = int(usr["id"].(float64))
+	friendRequest.SenderName = usr["name"].(string)
+	friendRequest.ReceiverName = user.Name
+	friendRequest.ReceiverID = int(user.ID)
+	friendRequest.Status = "pending"
+
+	db.GetDB().Create(&friendRequest)
+
+	return c.Status(200).JSON(fiber.Map{
+		"message": "Friend request sent",
+		"req":     friendRequest,
+	})
+}
+
+func AcceptFriendRequest(c *fiber.Ctx) error {
+
+	id := c.Params("id")
+
+	if id == "" || id == "0" {
+		return c.Status(400).JSON(fiber.Map{
+			"message": "Invalid request",
+		})
+	}
+
+	token := c.Cookies("jwt_token")
+
+	if token == "" {
+		return c.Status(401).JSON(fiber.Map{
+			"message": "Unauthorized",
+		})
+	}
+
+	usr := middlewares.VerifyTokenAndParse(token)
+
+	if usr == nil {
+		return c.Status(401).JSON(fiber.Map{
+			"message": "Unauthorized",
+		})
+	}
+
+	var friendRequest models.Friends
+
+	db.GetDB().Where("id = ?", id).First(&friendRequest)
+
+	if friendRequest.SenderID == 0 {
+		return c.Status(404).JSON(fiber.Map{
+			"message": "Friend request not found",
+		})
+	}
+
+	if int(usr["id"].(float64)) != friendRequest.ReceiverID {
+		return c.Status(401).JSON(fiber.Map{
+			"message": "Unauthorized",
+		})
+	}
+
+	friendRequest.Status = "accepted"
+
+	db.GetDB().Save(&friendRequest)
+
+	return c.Status(200).JSON(fiber.Map{
+		"message": "Friend request accepted",
+	})
+}
+
+func GetFriendRequests(c *fiber.Ctx) error {
+
+	token := c.Cookies("jwt_token")
+
+	if token == "" {
+		return c.Status(401).JSON(fiber.Map{
+			"message": "Unauthorized",
+		})
+	}
+
+	usr := middlewares.VerifyTokenAndParse(token)
+
+	if usr == nil {
+		return c.Status(401).JSON(fiber.Map{
+			"message": "Unauthorized",
+		})
+	}
+
+	var friendRequests []models.Friends
+
+	db.GetDB().Where("receiver_id = ?", int(usr["id"].(float64))).Find(&friendRequests)
+
+	var response []map[string]interface{}
+
+	var t map[string]interface{}
+
+	for _, req := range friendRequests {
+		t = make(map[string]interface{})
+
+		t["id"] = req.SenderID
+		t["name"] = req.SenderName
+
+		response = append(response, t)
+	}
+
+	return c.JSON(fiber.Map{
+		"message": response,
+	})
+}
+
+func GetAllFriendsRequests(c *fiber.Ctx) error {
+
+	var friendRequests []models.Friends
+
+	db.GetDB().Find(&friendRequests)
+
+	return c.JSON(fiber.Map{
+		"message": friendRequests,
+	})
+}
+
+func DeleteFriendRequest(c *fiber.Ctx) error {
+	request := make(map[string]interface{})
+
+	if err := c.BodyParser(&request); err != nil {
+		return c.Status(400).JSON(fiber.Map{
+			"message": "Invalid request",
+		})
+	}
+
+	token := c.Cookies("jwt_token")
+
+	if token == "" {
+		return c.Status(401).JSON(fiber.Map{
+			"message": "Unauthorized",
+		})
+	}
+
+	usr := middlewares.VerifyTokenAndParse(token)
+
+	if usr == nil {
+		return c.Status(401).JSON(fiber.Map{
+			"message": "Unauthorized",
+		})
+	}
+
+	var friendRequest models.Friends
+
+	// delete friend request
+
+	db.GetDB().Where("sender_id = ? AND receiver_id = ?", int(usr["id"].(float64)), request["id"]).First(&friendRequest)
+
+	if friendRequest.SenderID == 0 {
+		return c.Status(404).JSON(fiber.Map{
+			"message": "Friend request not found",
+		})
+	}
+
+	db.GetDB().Delete(&friendRequest)
+
+	return c.Status(200).JSON(fiber.Map{
+		"message": "Friend request deleted",
+	})
+}
+
 func GetUser(c *fiber.Ctx) error {
 
 	var user models.User
@@ -185,8 +437,43 @@ func GetUser(c *fiber.Ctx) error {
 		})
 	}
 
+	response := make(map[string]interface{})
+
+	response["name"] = user.Name
+	response["email"] = user.Email
+	response["rank"] = user.Rank
+	response["librarian"] = user.Librarian
+	response["admin"] = user.Admin
+	response["profile_pic"] = user.ProfilePic
+	response["real_name"] = user.RealName
+
+	db.GetDB().Model(&user).Association("Books").Find(&user.Books)
+
+	var userBooks []models.UserBooks
+
+	db.GetDB().Where("user_id = ?", user.ID).Find(&userBooks)
+
+	var responseBooks []map[string]interface{}
+
+	for _, booksFromDb := range userBooks {
+		for _, booksFromUserRes := range user.Books {
+			if booksFromDb.BookID == uint(booksFromUserRes.ID) {
+				bookFromDbMap := BookStructToMap(booksFromDb)
+				bookFromUserResMap := BookStructToMap(booksFromUserRes)
+
+				for k, v := range bookFromDbMap {
+					bookFromUserResMap[k] = v
+				}
+
+				responseBooks = append(responseBooks, bookFromUserResMap)
+			}
+		}
+	}
+
+	response["books"] = responseBooks
+
 	return c.JSON(fiber.Map{
-		"message": user,
+		"message": response,
 	})
 
 }
@@ -268,11 +555,7 @@ func ModifyUser(c *fiber.Ctx) error {
 
 	var user models.User
 
-	fmt.Println(id)
-
 	db.GetDB().Where("id = ?", id).First(&user)
-
-	fmt.Println(user.ID)
 
 	if user.ID == 0 {
 		return c.Status(404).JSON(fiber.Map{
