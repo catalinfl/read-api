@@ -13,5 +13,6 @@ func librarianRoute(api fiber.Router) {
 
 	librarianRoute.Post("/create-book", controllers.CreateBook)
 	librarianRoute.Put("/modify-book/:id", controllers.ModifyBook)
+	librarianRoute.Delete("/delete-book/:bookId", controllers.DeleteBookLibrarian)
 
 }

@@ -399,5 +399,32 @@ func ModifyBook(c *fiber.Ctx) error {
 		"message": "Book updated successfully",
 		"book":    book,
 	})
+}
+
+func DeleteBookLibrarian(c *fiber.Ctx) error {
+
+	var book models.Book
+
+	id := c.Params("bookId")
+
+	if id == "" || id == "0" {
+		return c.Status(400).JSON(fiber.Map{
+			"data": "Invalid request",
+		})
+	}
+
+	db.GetDB().Where("id = ?", id).First(&book)
+
+	if book.ID == 0 {
+		return c.Status(404).JSON(fiber.Map{
+			"data": "Book not found",
+		})
+	}
+
+	db.GetDB().Delete(&book)
+
+	return c.JSON(fiber.Map{
+		"message": "Book deleted successfully",
+	})
 
 }

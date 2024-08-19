@@ -61,7 +61,7 @@ func CreateUser(c *fiber.Ctx) error {
 
 	var existingUser models.User
 
-	db.GetDB().Where("name = ?", user.Name).First(&existingUser)
+	db.GetDB().Where("name = ? OR email = ?", user.Name, user.Email).First(&existingUser)
 
 	if existingUser.ID > 0 {
 		return c.Status(400).JSON(fiber.Map{
@@ -168,6 +168,14 @@ func GetUsers(c *fiber.Ctx) error {
 
 }
 
+func Logout(c *fiber.Ctx) error {
+	c.ClearCookie("jwt_token")
+
+	return c.JSON(fiber.Map{
+		"message": "Logged out",
+	})
+}
+
 func BookStructToMap(obj interface{}) map[string]interface{} {
 	val := reflect.ValueOf(obj)
 
@@ -237,7 +245,15 @@ func SendFriendRequest(c *fiber.Ctx) error {
 
 	var friendRequestReceived models.Friends
 
-	rows := db.GetDB().Where("receiver_id = ? AND sender_id = ?", num, int(usr["id"].(float64))).First(&friendRequestReceived)
+	rows := db.GetDB().Where("(receiver_id = ? AND sender_id = ?) OR (sender_id = ? AND receiver_id = ?)", int(usr["id"].(float64)), num, int(usr["id"].(float64)), num).First(&friendRequestReceived)
+
+	if rows.RowsAffected > 0 {
+		return c.Status(400).JSON(fiber.Map{
+			"message": "A friend request is already pending, or you are already friend with this user",
+		})
+	}
+
+	rows = db.GetDB().Where("receiver_id = ? AND sender_id = ?", num, int(usr["id"].(float64))).First(&friendRequestReceived)
 
 	if rows.RowsAffected > 0 {
 		return c.Status(400).JSON(fiber.Map{
@@ -271,6 +287,132 @@ func SendFriendRequest(c *fiber.Ctx) error {
 	})
 }
 
+func EditPhoto(c *fiber.Ctx) error {
+	token := c.Cookies("jwt_token")
+
+	t := middlewares.VerifyTokenAndParse(token)
+
+	if t == nil {
+		return c.Status(401).JSON(fiber.Map{
+			"data": "Unauthorized, please log in",
+		})
+	}
+
+	var user models.User
+
+	db.GetDB().Where("id = ?", int(t["id"].(float64))).First(&user)
+
+	if user.ID == 0 {
+		return c.Status(400).JSON(fiber.Map{
+			"data": "User not found",
+		})
+	}
+
+	multipartForm, err := c.MultipartForm()
+
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{
+			"data": "Invalid request",
+		})
+	}
+
+	files := multipartForm.File["profile_pic"]
+
+	if len(files) != 1 {
+		return c.Status(400).JSON(fiber.Map{
+			"data": "Invalid request",
+		})
+	}
+
+	file := files[0]
+
+	fileType := file.Header.Get("Content-Type")
+
+	if fileType != "image/jpeg" && fileType != "image/png" {
+		return c.Status(400).JSON(fiber.Map{
+			"data": "Invalid file type",
+		})
+	}
+
+	dirPath := "/app/assets/"
+	filePath := dirPath + strconv.Itoa(int(user.ID))
+
+	if _, err := os.Stat(dirPath); os.IsNotExist(err) {
+		err := os.MkdirAll(dirPath, os.ModePerm)
+		if err != nil {
+			return c.Status(500).JSON(fiber.Map{
+				"data": "Failed to create directory",
+			})
+		}
+	}
+
+	if file.Size > 1<<20 {
+		return c.Status(400).JSON(fiber.Map{
+			"data": "File is too big",
+		})
+	} else {
+		err := c.SaveFile(file, filePath)
+		if err != nil {
+			return c.Status(500).JSON(fiber.Map{
+				"data": "Photo can't be uploaded",
+			})
+		}
+	}
+
+	// Update the user's profile picture path
+	user.ProfilePic = filePath
+	db.GetDB().Save(&user)
+
+	return c.Status(200).JSON(fiber.Map{
+		"data": "Photo uploaded successfully",
+	})
+}
+
+func DeletePhoto(c *fiber.Ctx) error {
+	token := c.Cookies("jwt_token")
+
+	t := middlewares.VerifyTokenAndParse(token)
+
+	if t == nil {
+		return c.Status(401).JSON(fiber.Map{
+			"data": "Unauthorized, please log in",
+		})
+	}
+
+	var user models.User
+
+	db.GetDB().Where("id = ?", int(t["id"].(float64))).First(&user)
+
+	if user.ID == 0 {
+		return c.Status(400).JSON(fiber.Map{
+			"data": "User not found",
+		})
+	}
+
+	if user.ProfilePic == "" {
+		return c.Status(404).JSON(fiber.Map{
+			"data": "Photo not found",
+		})
+	}
+
+	err := os.Remove(user.ProfilePic)
+
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{
+			"data": "Failed to delete photo",
+		})
+	}
+
+	user.ProfilePic = ""
+
+	db.GetDB().Save(&user)
+
+	return c.Status(200).JSON(fiber.Map{
+		"data": "Photo deleted successfully",
+	})
+
+}
+
 func AcceptFriendRequest(c *fiber.Ctx) error {
 
 	id := c.Params("id")
@@ -299,11 +441,25 @@ func AcceptFriendRequest(c *fiber.Ctx) error {
 
 	var friendRequest models.Friends
 
-	db.GetDB().Where("id = ?", id).First(&friendRequest)
+	numId, err := strconv.Atoi(id)
+
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{
+			"message": "Invalid request",
+		})
+	}
+
+	db.GetDB().Where("(receiver_id = ? AND sender_id = ?) AND status = ?", int(usr["id"].(float64)), numId, "pending").First(&friendRequest)
 
 	if friendRequest.SenderID == 0 {
 		return c.Status(404).JSON(fiber.Map{
 			"message": "Friend request not found",
+		})
+	}
+
+	if friendRequest.Status == "accepted" {
+		return c.Status(400).JSON(fiber.Map{
+			"message": "Friend request already accepted",
 		})
 	}
 
@@ -315,7 +471,7 @@ func AcceptFriendRequest(c *fiber.Ctx) error {
 
 	friendRequest.Status = "accepted"
 
-	db.GetDB().Save(&friendRequest)
+	db.GetDB().Where("sender_id = ? AND receiver_id = ?", friendRequest.SenderID, friendRequest.ReceiverID).Save(&friendRequest)
 
 	return c.Status(200).JSON(fiber.Map{
 		"message": "Friend request accepted",
@@ -373,14 +529,16 @@ func GetAllFriendsRequests(c *fiber.Ctx) error {
 	})
 }
 
-func DeleteFriendRequest(c *fiber.Ctx) error {
-	request := make(map[string]interface{})
+func RejectFriendRequest(c *fiber.Ctx) error {
+	id := c.Params("id")
 
-	if err := c.BodyParser(&request); err != nil {
+	if id == "" || id == "0" {
 		return c.Status(400).JSON(fiber.Map{
 			"message": "Invalid request",
 		})
 	}
+
+	fmt.Println(id)
 
 	token := c.Cookies("jwt_token")
 
@@ -402,19 +560,53 @@ func DeleteFriendRequest(c *fiber.Ctx) error {
 
 	// delete friend request
 
-	db.GetDB().Where("sender_id = ? AND receiver_id = ?", int(usr["id"].(float64)), request["id"]).First(&friendRequest)
+	affected := db.GetDB().Where("sender_id = ? AND receiver_id = ?", id, int(usr["id"].(float64))).First(&friendRequest)
 
-	if friendRequest.SenderID == 0 {
+	if affected.RowsAffected == 0 {
 		return c.Status(404).JSON(fiber.Map{
 			"message": "Friend request not found",
 		})
 	}
 
-	db.GetDB().Delete(&friendRequest)
+	db.GetDB().Where("receiver_id = ? AND sender_id = ?", int(usr["id"].(float64)), id).Delete(&friendRequest)
 
 	return c.Status(200).JSON(fiber.Map{
 		"message": "Friend request deleted",
 	})
+}
+
+func ServePhoto(c *fiber.Ctx) error {
+
+	token := c.Cookies("jwt_token")
+
+	t := middlewares.VerifyTokenAndParse(token)
+
+	if t == nil {
+		return c.Status(401).JSON(fiber.Map{
+			"data": "Unauthorized, please log in",
+		})
+	}
+
+	var user models.User
+
+	db.GetDB().Where("id = ?", int(t["id"].(float64))).First(&user)
+
+	if user.ID == 0 {
+		return c.Status(400).JSON(fiber.Map{
+			"data": "User not found",
+		})
+	}
+
+	if user.ProfilePic == "" {
+		return c.Status(404).JSON(fiber.Map{
+			"data": "Photo not found",
+		})
+	}
+
+	photoPath := user.ProfilePic
+
+	return c.Status(201).SendFile(photoPath)
+
 }
 
 func GetUser(c *fiber.Ctx) error {
@@ -446,6 +638,47 @@ func GetUser(c *fiber.Ctx) error {
 	response["admin"] = user.Admin
 	response["profile_pic"] = user.ProfilePic
 	response["real_name"] = user.RealName
+
+	var friends []models.Friends
+
+	db.GetDB().Where("(sender_id = ? OR receiver_id = ?) AND status = ?", user.ID, user.ID, "accepted").Find(&friends)
+
+	var responseFriends []map[string]interface{}
+
+	for _, friend := range friends {
+		responseFriend := make(map[string]interface{})
+
+		if friend.SenderID == int(user.ID) {
+			responseFriend["id"] = friend.ReceiverID
+			responseFriend["name"] = friend.ReceiverName
+		} else {
+			responseFriend["id"] = friend.SenderID
+			responseFriend["name"] = friend.SenderName
+		}
+
+		responseFriends = append(responseFriends, responseFriend)
+	}
+
+	response["friendsNumber"] = len(responseFriends)
+	response["friends"] = responseFriends
+
+	var friendsPending []models.Friends
+
+	db.GetDB().Where("receiver_id = ? AND status = ?", user.ID, "pending").Find(&friendsPending)
+
+	var responseFriendsPending []map[string]interface{}
+
+	for _, friendPending := range friendsPending {
+		responseFriendPending := make(map[string]interface{})
+
+		responseFriendPending["id"] = friendPending.SenderID
+		responseFriendPending["name"] = friendPending.SenderName
+
+		responseFriendsPending = append(responseFriendsPending, responseFriendPending)
+	}
+
+	response["friendsPendingNumber"] = len(responseFriendsPending)
+	response["friendsPending"] = responseFriendsPending
 
 	db.GetDB().Model(&user).Association("Books").Find(&user.Books)
 

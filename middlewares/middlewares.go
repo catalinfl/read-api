@@ -66,7 +66,7 @@ func VerifyIfLibrarian(c *fiber.Ctx) error {
 
 	var user models.User
 
-	db.GetDB().Where("name = ?", str).First(&user)
+	db.GetDB().Where("name = ?", str["name"].(string)).First(&user)
 
 	if user.ID == 0 {
 		return c.Status(404).JSON(fiber.Map{
@@ -103,7 +103,7 @@ func VerifyIfAdmin(c *fiber.Ctx) error {
 
 	var user models.User
 
-	db.GetDB().Where("name = ?", str).First(&user)
+	db.GetDB().Where("name = ?", str["name"].(string)).First(&user)
 
 	if user.ID == 0 {
 		return c.Status(404).JSON(fiber.Map{

@@ -13,8 +13,9 @@ func booksRoute(api fiber.Router) {
 
 	bookRoute.Get("/user-books", controllers.GetAllUserBooks)
 	bookRoute.Get("/user-books/:id", controllers.GetUserBooks)
-	bookRoute.Delete("/user-books/:bookId", controllers.DeleteUserBook)
+
 	bookRoute.Post("/user-books", middlewares.CountUserBooks, controllers.CreateUserBook)
+	bookRoute.Delete("/user-books/:bookId", controllers.DeleteUserBook)
 
 	bookRoute.Get("/get-paginated", controllers.GetBooksPaginated)
 	bookRoute.Get("/get-infinite/:id", controllers.GetBooks)
