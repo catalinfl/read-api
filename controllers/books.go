@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"fmt"
+	"os"
 	"strconv"
 
 	"github.com/catalinfl/readit-api/db"
@@ -204,8 +205,7 @@ func CreateUserBook(c *fiber.Ctx) error {
 	db.GetDB().Create(&userBook)
 
 	return c.JSON(fiber.Map{
-		"message": "User book created successfully",
-		"data":    userBook,
+		"data": "User book created successfully",
 	})
 
 }
@@ -233,7 +233,7 @@ func DeleteBook(c *fiber.Ctx) error {
 	db.GetDB().Delete(&book)
 
 	return c.JSON(fiber.Map{
-		"message": "Book deleted successfully",
+		"data": "Book deleted successfully",
 	})
 }
 
@@ -258,7 +258,7 @@ func UpdateReadingBook(c *fiber.Ctx) error {
 	db.GetDB().Model(&userBook).Updates(userBook)
 
 	return c.JSON(fiber.Map{
-		"message":    "User book updated successfully",
+		"data":       "User book updated successfully",
 		"pages_read": userBook.PagesRead,
 	})
 
@@ -291,8 +291,7 @@ func UpdateGenre(c *fiber.Ctx) error {
 	db.GetDB().Save(&book)
 
 	return c.JSON(fiber.Map{
-		"message": "Book genre updated successfully",
-		"data":    book.Genre,
+		"data": book.Genre,
 	})
 }
 
@@ -319,7 +318,7 @@ func DeleteUserBook(c *fiber.Ctx) error {
 	db.GetDB().Delete(&userBook)
 
 	return c.JSON(fiber.Map{
-		"message": "User book deleted successfully",
+		"data": "User book deleted successfully",
 	})
 
 }
@@ -396,8 +395,8 @@ func ModifyBook(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(fiber.Map{
-		"message": "Book updated successfully",
-		"book":    book,
+		"data": "Book updated successfully",
+		"book": book,
 	})
 }
 
@@ -424,7 +423,179 @@ func DeleteBookLibrarian(c *fiber.Ctx) error {
 	db.GetDB().Delete(&book)
 
 	return c.JSON(fiber.Map{
-		"message": "Book deleted successfully",
+		"data": "Book deleted successfully",
+	})
+
+}
+
+func AddPhotosForBooks(c *fiber.Ctx) error {
+
+	token := c.Cookies("jwt_token")
+
+	t := middlewares.VerifyTokenAndParse(token)
+
+	if t == nil {
+		return c.Status(401).JSON(fiber.Map{
+			"data": "Unauthorized, please log in",
+		})
+	}
+
+	bookId := c.Params("bookId")
+
+	if bookId == "" || bookId == "0" {
+		return c.Status(400).JSON(fiber.Map{
+			"data": "Invalid request",
+		})
+	}
+
+	var book models.Book
+
+	db.GetDB().Where("id = ?", bookId).First(&book)
+
+	if book.ID == 0 {
+		return c.Status(404).JSON(fiber.Map{
+			"data": "Book not found",
+		})
+	}
+
+	form, err := c.MultipartForm()
+
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{
+			"data": "Invalid request",
+		})
+	}
+
+	file := form.File["photos"]
+
+	if len(file) != 1 {
+		return c.Status(400).JSON(fiber.Map{
+			"data": "You need to send just one photo",
+		})
+	}
+
+	photo := file[0]
+
+	if photo.Size > 1<<20 {
+		return c.Status(400).JSON(fiber.Map{
+			"data": "File size too big",
+		})
+	}
+
+	dirPath := "/app/books/"
+
+	filePath := dirPath + strconv.Itoa(int(book.ID))
+
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+
+		os.Mkdir(dirPath, os.ModePerm)
+
+	}
+
+	if err := c.SaveFile(photo, filePath); err != nil {
+		fmt.Println(err)
+		return c.Status(500).JSON(fiber.Map{
+			"data": "Failed to save photo",
+		})
+	}
+
+	emptyArray := []string{}
+
+	// for future add more photos
+
+	book.Photos = append(emptyArray, filePath)
+
+	db.GetDB().Save(&book)
+
+	return c.JSON(fiber.Map{
+		"data": "Photo added successfully",
+	})
+}
+
+func GetBooksPhoto(c *fiber.Ctx) error {
+
+	id := c.Params("id")
+
+	if id == "" || id == "0" {
+		return c.Status(400).JSON(fiber.Map{
+			"data": "Invalid request",
+		})
+	}
+
+	var book models.Book
+
+	db.GetDB().Where("id = ?", id).First(&book)
+
+	if book.ID == 0 {
+		return c.Status(404).JSON(fiber.Map{
+			"data": "Book not found",
+		})
+	}
+
+	return c.Status(200).SendFile(book.Photos[0])
+
+}
+
+func GetBook(c *fiber.Ctx) error {
+
+	id := c.Params("id")
+
+	if id == "" || id == "0" {
+		return c.Status(400).JSON(fiber.Map{
+			"data": "Invalid request",
+		})
+	}
+
+	var book models.Book
+
+	db.GetDB().Where("id = ?", id).First(&book)
+
+	if book.ID == 0 {
+		return c.Status(404).JSON(fiber.Map{
+			"data": "Book not found",
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"data": book,
+	})
+
+}
+
+func DeleteBookPhoto(c *fiber.Ctx) error {
+
+	id := c.Params("bookId")
+
+	if id == "" || id == "0" {
+		return c.Status(400).JSON(fiber.Map{
+			"data": "Invalid request",
+		})
+	}
+
+	var book models.Book
+
+	db.GetDB().Where("id = ?", id).First(&book)
+
+	if book.ID == 0 {
+		return c.Status(404).JSON(fiber.Map{
+			"data": "Book not found",
+		})
+	}
+
+	err := os.Remove(book.Photos[0])
+
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{
+			"data": "Failed to delete photo",
+		})
+	}
+
+	book.Photos = nil
+
+	db.GetDB().Save(&book)
+
+	return c.JSON(fiber.Map{
+		"data": "Photo deleted successfully",
 	})
 
 }

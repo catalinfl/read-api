@@ -10,6 +10,8 @@ func booksRoute(api fiber.Router) {
 	bookRoute := api.Group("/books")
 
 	bookRoute.Get("/", controllers.GetAllBooks)
+	bookRoute.Get("/book-photo/:id", controllers.GetBooksPhoto)
+	bookRoute.Get("/:id", controllers.GetBook)
 
 	bookRoute.Get("/user-books", controllers.GetAllUserBooks)
 	bookRoute.Get("/user-books/:id", controllers.GetUserBooks)

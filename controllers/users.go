@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"reflect"
@@ -12,6 +13,7 @@ import (
 	"github.com/catalinfl/readit-api/db"
 	"github.com/catalinfl/readit-api/middlewares"
 	"github.com/catalinfl/readit-api/models"
+	"github.com/catalinfl/readit-api/utils"
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/joho/godotenv"
@@ -24,19 +26,19 @@ func CreateUser(c *fiber.Ctx) error {
 
 	if err := c.BodyParser(&user); err != nil {
 		return c.Status(400).JSON(fiber.Map{
-			"message": "Invalid request",
+			"data": "Invalid request",
 		})
 	}
 
 	if len(user.Name) < 3 && len(user.Name) > 100 {
 		return c.Status(400).JSON(fiber.Map{
-			"message": "Name must be between 3 and 100 characters",
+			"data": "Name must be between 3 and 100 characters",
 		})
 	}
 
 	if len(user.Email) < 3 && len(user.Email) > 100 {
 		return c.Status(400).JSON(fiber.Map{
-			"message": "Email must be between 3 and 100 characters",
+			"data": "Email must be between 3 and 100 characters",
 		})
 	}
 
@@ -44,7 +46,7 @@ func CreateUser(c *fiber.Ctx) error {
 
 	if !emailRegex.MatchString(user.Email) {
 		return c.Status(400).JSON(fiber.Map{
-			"message": "Invalid email address",
+			"data": "Invalid email address",
 		})
 	}
 
@@ -53,7 +55,7 @@ func CreateUser(c *fiber.Ctx) error {
 
 	if !letterRegex.MatchString(user.Password) || !digitRegex.MatchString(user.Password) || len(user.Password) < 8 {
 		return c.Status(400).JSON(fiber.Map{
-			"message": "Password must contain at least 8 characters, one letter and one digit",
+			"data": "Password must contain at least 8 characters, one letter and one digit",
 		})
 	}
 
@@ -65,14 +67,14 @@ func CreateUser(c *fiber.Ctx) error {
 
 	if existingUser.ID > 0 {
 		return c.Status(400).JSON(fiber.Map{
-			"message": "User already exists",
+			"data": "User already exists",
 		})
 	}
 
 	db.GetDB().Create(&user)
 
 	return c.JSON(fiber.Map{
-		"message": "User created successfully",
+		"data": "User created successfully",
 	})
 }
 
@@ -94,7 +96,7 @@ func Login(c *fiber.Ctx) error {
 
 	if err := c.BodyParser(&request); err != nil {
 		return c.Status(400).JSON(fiber.Map{
-			"message": "Invalid request",
+			"data": "Invalid request",
 		})
 	}
 
@@ -104,13 +106,13 @@ func Login(c *fiber.Ctx) error {
 
 	if user.ID == 0 {
 		return c.Status(404).JSON(fiber.Map{
-			"message": "User not found",
+			"data": "User not found",
 		})
 	}
 
 	if !checkPassword(user.Password, request["password"].(string)) {
 		return c.Status(400).JSON(fiber.Map{
-			"message": "Incorrect password",
+			"data": "Incorrect password",
 		})
 	}
 
@@ -131,7 +133,7 @@ func Login(c *fiber.Ctx) error {
 
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{
-			"message": "Could not login",
+			"data": "Could not login",
 		})
 	}
 
@@ -145,7 +147,7 @@ func Login(c *fiber.Ctx) error {
 	})
 
 	return c.JSON(fiber.Map{
-		"message": "Login successful",
+		"data": "Login successful",
 	})
 
 }
@@ -163,7 +165,7 @@ func GetUsers(c *fiber.Ctx) error {
 	db.GetDB().Find(&users)
 
 	return c.JSON(fiber.Map{
-		"message": users,
+		"data": users,
 	})
 
 }
@@ -172,7 +174,7 @@ func Logout(c *fiber.Ctx) error {
 	c.ClearCookie("jwt_token")
 
 	return c.JSON(fiber.Map{
-		"message": "Logged out",
+		"data": "Logged out",
 	})
 }
 
@@ -209,7 +211,7 @@ func SendFriendRequest(c *fiber.Ctx) error {
 
 	if id == "" || id == "0" {
 		return c.Status(400).JSON(fiber.Map{
-			"message": "Invalid request",
+			"data": "Invalid request",
 		})
 	}
 
@@ -217,7 +219,7 @@ func SendFriendRequest(c *fiber.Ctx) error {
 
 	if token == "" {
 		return c.Status(401).JSON(fiber.Map{
-			"message": "Unauthorized",
+			"data": "Unauthorized",
 		})
 	}
 
@@ -225,7 +227,7 @@ func SendFriendRequest(c *fiber.Ctx) error {
 
 	if token == "" {
 		return c.Status(401).JSON(fiber.Map{
-			"message": "Unauthorized",
+			"data": "Unauthorized",
 		})
 	}
 
@@ -233,13 +235,13 @@ func SendFriendRequest(c *fiber.Ctx) error {
 
 	if err != nil {
 		return c.Status(400).JSON(fiber.Map{
-			"message": "Invalid request",
+			"data": "Invalid request",
 		})
 	}
 
 	if int(usr["id"].(float64)) == num {
 		return c.Status(400).JSON(fiber.Map{
-			"message": "Invalid request",
+			"data": "Invalid request",
 		})
 	}
 
@@ -249,7 +251,7 @@ func SendFriendRequest(c *fiber.Ctx) error {
 
 	if rows.RowsAffected > 0 {
 		return c.Status(400).JSON(fiber.Map{
-			"message": "A friend request is already pending, or you are already friend with this user",
+			"data": "A friend request is already pending, or you are already friend with this user",
 		})
 	}
 
@@ -257,7 +259,7 @@ func SendFriendRequest(c *fiber.Ctx) error {
 
 	if rows.RowsAffected > 0 {
 		return c.Status(400).JSON(fiber.Map{
-			"message": "Friend request already sent",
+			"data": "Friend request already sent",
 		})
 	}
 
@@ -267,7 +269,7 @@ func SendFriendRequest(c *fiber.Ctx) error {
 
 	if user.ID == 0 {
 		return c.Status(404).JSON(fiber.Map{
-			"message": "User not found",
+			"data": "User not found",
 		})
 	}
 
@@ -282,8 +284,8 @@ func SendFriendRequest(c *fiber.Ctx) error {
 	db.GetDB().Create(&friendRequest)
 
 	return c.Status(200).JSON(fiber.Map{
-		"message": "Friend request sent",
-		"req":     friendRequest,
+		"data": "Friend request sent",
+		"req":  friendRequest,
 	})
 }
 
@@ -347,9 +349,40 @@ func EditPhoto(c *fiber.Ctx) error {
 	}
 
 	if file.Size > 1<<20 {
-		return c.Status(400).JSON(fiber.Map{
-			"data": "File is too big",
-		})
+		photoImage, err := utils.CompressPhoto(c, file)
+
+		if err != nil {
+			return c.Status(500).JSON(fiber.Map{
+				"data": "Photo can't be compressed",
+			})
+		}
+
+		var buf bytes.Buffer
+
+		_, err = utils.ImageToMultipartFileHeader(photoImage, filePath, fileType, &buf)
+
+		if err != nil {
+			return c.Status(500).JSON(fiber.Map{
+				"data": "Photo can't be converted",
+			})
+		}
+
+		outFile, err := os.Create(filePath)
+
+		if err != nil {
+			return c.Status(500).JSON(fiber.Map{
+				"data": "Photo can't be saved",
+			})
+		}
+
+		defer outFile.Close()
+
+		if _, err := outFile.Write(buf.Bytes()); err != nil {
+			return c.Status(500).JSON(fiber.Map{
+				"data": "Photo can't be saved",
+			})
+		}
+
 	} else {
 		err := c.SaveFile(file, filePath)
 		if err != nil {
@@ -395,7 +428,7 @@ func DeletePhoto(c *fiber.Ctx) error {
 		})
 	}
 
-	err := os.Remove(user.ProfilePic)
+	err := os.Remove("/app/assets/" + strconv.Itoa(int(user.ID)))
 
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{
@@ -419,7 +452,7 @@ func AcceptFriendRequest(c *fiber.Ctx) error {
 
 	if id == "" || id == "0" {
 		return c.Status(400).JSON(fiber.Map{
-			"message": "Invalid request",
+			"data": "Invalid request",
 		})
 	}
 
@@ -427,7 +460,7 @@ func AcceptFriendRequest(c *fiber.Ctx) error {
 
 	if token == "" {
 		return c.Status(401).JSON(fiber.Map{
-			"message": "Unauthorized",
+			"data": "Unauthorized",
 		})
 	}
 
@@ -435,7 +468,7 @@ func AcceptFriendRequest(c *fiber.Ctx) error {
 
 	if usr == nil {
 		return c.Status(401).JSON(fiber.Map{
-			"message": "Unauthorized",
+			"data": "Unauthorized",
 		})
 	}
 
@@ -445,7 +478,7 @@ func AcceptFriendRequest(c *fiber.Ctx) error {
 
 	if err != nil {
 		return c.Status(400).JSON(fiber.Map{
-			"message": "Invalid request",
+			"data": "Invalid request",
 		})
 	}
 
@@ -453,19 +486,19 @@ func AcceptFriendRequest(c *fiber.Ctx) error {
 
 	if friendRequest.SenderID == 0 {
 		return c.Status(404).JSON(fiber.Map{
-			"message": "Friend request not found",
+			"data": "Friend request not found",
 		})
 	}
 
 	if friendRequest.Status == "accepted" {
 		return c.Status(400).JSON(fiber.Map{
-			"message": "Friend request already accepted",
+			"data": "Friend request already accepted",
 		})
 	}
 
 	if int(usr["id"].(float64)) != friendRequest.ReceiverID {
 		return c.Status(401).JSON(fiber.Map{
-			"message": "Unauthorized",
+			"data": "Unauthorized",
 		})
 	}
 
@@ -474,7 +507,7 @@ func AcceptFriendRequest(c *fiber.Ctx) error {
 	db.GetDB().Where("sender_id = ? AND receiver_id = ?", friendRequest.SenderID, friendRequest.ReceiverID).Save(&friendRequest)
 
 	return c.Status(200).JSON(fiber.Map{
-		"message": "Friend request accepted",
+		"data": "Friend request accepted",
 	})
 }
 
@@ -484,7 +517,7 @@ func GetFriendRequests(c *fiber.Ctx) error {
 
 	if token == "" {
 		return c.Status(401).JSON(fiber.Map{
-			"message": "Unauthorized",
+			"data": "Unauthorized",
 		})
 	}
 
@@ -492,7 +525,7 @@ func GetFriendRequests(c *fiber.Ctx) error {
 
 	if usr == nil {
 		return c.Status(401).JSON(fiber.Map{
-			"message": "Unauthorized",
+			"data": "Unauthorized",
 		})
 	}
 
@@ -514,7 +547,7 @@ func GetFriendRequests(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(fiber.Map{
-		"message": response,
+		"data": response,
 	})
 }
 
@@ -525,7 +558,7 @@ func GetAllFriendsRequests(c *fiber.Ctx) error {
 	db.GetDB().Find(&friendRequests)
 
 	return c.JSON(fiber.Map{
-		"message": friendRequests,
+		"data": friendRequests,
 	})
 }
 
@@ -534,7 +567,7 @@ func RejectFriendRequest(c *fiber.Ctx) error {
 
 	if id == "" || id == "0" {
 		return c.Status(400).JSON(fiber.Map{
-			"message": "Invalid request",
+			"data": "Invalid request",
 		})
 	}
 
@@ -544,7 +577,7 @@ func RejectFriendRequest(c *fiber.Ctx) error {
 
 	if token == "" {
 		return c.Status(401).JSON(fiber.Map{
-			"message": "Unauthorized",
+			"data": "Unauthorized",
 		})
 	}
 
@@ -552,7 +585,7 @@ func RejectFriendRequest(c *fiber.Ctx) error {
 
 	if usr == nil {
 		return c.Status(401).JSON(fiber.Map{
-			"message": "Unauthorized",
+			"data": "Unauthorized",
 		})
 	}
 
@@ -564,14 +597,14 @@ func RejectFriendRequest(c *fiber.Ctx) error {
 
 	if affected.RowsAffected == 0 {
 		return c.Status(404).JSON(fiber.Map{
-			"message": "Friend request not found",
+			"data": "Friend request not found",
 		})
 	}
 
 	db.GetDB().Where("receiver_id = ? AND sender_id = ?", int(usr["id"].(float64)), id).Delete(&friendRequest)
 
 	return c.Status(200).JSON(fiber.Map{
-		"message": "Friend request deleted",
+		"data": "Friend request deleted",
 	})
 }
 
@@ -617,7 +650,7 @@ func GetUser(c *fiber.Ctx) error {
 
 	if id == "" || id == "0" {
 		return c.Status(400).JSON(fiber.Map{
-			"message": "Invalid request",
+			"data": "Invalid request",
 		})
 	}
 
@@ -625,7 +658,7 @@ func GetUser(c *fiber.Ctx) error {
 
 	if user.ID == 0 {
 		return c.Status(404).JSON(fiber.Map{
-			"message": "User not found",
+			"data": "User not found",
 		})
 	}
 
@@ -706,7 +739,7 @@ func GetUser(c *fiber.Ctx) error {
 	response["books"] = responseBooks
 
 	return c.JSON(fiber.Map{
-		"message": response,
+		"data": response,
 	})
 
 }
@@ -717,7 +750,7 @@ func DeleteUser(c *fiber.Ctx) error {
 
 	if id == "" || id == "0" {
 		return c.Status(400).JSON(fiber.Map{
-			"message": "Invalid request",
+			"data": "Invalid request",
 		})
 	}
 
@@ -727,14 +760,14 @@ func DeleteUser(c *fiber.Ctx) error {
 
 	if user.ID == 0 {
 		return c.Status(404).JSON(fiber.Map{
-			"message": "User not found",
+			"data": "User not found",
 		})
 	}
 
 	db.GetDB().Delete(&user)
 
 	return c.JSON(fiber.Map{
-		"message": "User deleted successfully",
+		"data": "User deleted successfully",
 	})
 
 }
@@ -744,7 +777,7 @@ func PromoteToLibrarian(c *fiber.Ctx) error {
 
 	if id == "" || id == "0" {
 		return c.Status(400).JSON(fiber.Map{
-			"message": "Invalid request",
+			"data": "Invalid request",
 		})
 	}
 
@@ -754,7 +787,7 @@ func PromoteToLibrarian(c *fiber.Ctx) error {
 
 	if user.ID == 0 {
 		return c.Status(404).JSON(fiber.Map{
-			"message": "User not found",
+			"data": "User not found",
 		})
 	}
 
@@ -763,7 +796,7 @@ func PromoteToLibrarian(c *fiber.Ctx) error {
 	db.GetDB().Save(&user)
 
 	return c.JSON(fiber.Map{
-		"message": fmt.Sprintf("User %s has been promoted to librarian", user.Name),
+		"data": fmt.Sprintf("User %s has been promoted to librarian", user.Name),
 	})
 
 }
@@ -774,7 +807,7 @@ func ModifyUser(c *fiber.Ctx) error {
 
 	if id == "" {
 		return c.Status(401).JSON(fiber.Map{
-			"message": "User not found",
+			"data": "User not found",
 		})
 	}
 
@@ -782,7 +815,7 @@ func ModifyUser(c *fiber.Ctx) error {
 
 	if err := c.BodyParser(&request); err != nil {
 		return c.Status(404).JSON(fiber.Map{
-			"message": "Error at parsing json",
+			"data": "Error at parsing json",
 		})
 	}
 
@@ -792,7 +825,7 @@ func ModifyUser(c *fiber.Ctx) error {
 
 	if user.ID == 0 {
 		return c.Status(404).JSON(fiber.Map{
-			"message": "User not found",
+			"data": "User not found",
 		})
 	}
 
@@ -813,7 +846,7 @@ func ModifyUser(c *fiber.Ctx) error {
 	db.GetDB().Save(&user)
 
 	return c.Status(200).JSON(fiber.Map{
-		"message": "User has been modified",
+		"data": "User has been modified",
 	})
 
 }
